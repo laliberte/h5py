@@ -460,4 +460,28 @@ class Test2DZeroFloat(TestCase):
         """ see issue #473 """
         self.assertNumpyBehavior(self.dset, self.data, np.s_[:,[0,1,2]])
 
+@ut.skipUnless(h5py.version.hdf5_version_tuple >= (1, 8, 7), 'HDF5 1.8.7+ required')
+class Test2DOneFloat(TestCase):
+
+    def setUp(self):
+        TestCase.setUp(self)
+        self.data = np.ones((1,3), dtype='f')
+        self.dset = self.f.create_dataset('x', data=self.data)
         
+    def test_ndim(self):
+        """ Verify number of dimensions """
+        self.assertEquals(self.dset.ndim, 2)
+        
+    def test_shape(self):
+        """ Verify shape """
+        self.assertEquals(self.dset.shape, (1, 3))
+        
+    @ut.expectedFailure
+    def test_indexlist(self):
+        """ see issue #474 """
+        #Both True and False must pass:
+        self.assertNumpyBehavior(self.dset, self.data, 
+                                 np.s_[np.array([True,], dtype=np.bool),:])
+        self.assertNumpyBehavior(self.dset, self.data, 
+                                 np.s_[np.array([False,], dtype=np.bool),:])
+
