@@ -407,10 +407,10 @@ class Test1DFloat(TestCase):
             self.dset[[100]]
                 
     def test_indexlist_nonmonotonic(self):
-        """ we require index list values to be strictly increasing """
+        """ we require index list values to be non-decreasing """
         with self.assertRaises(TypeError):
             self.dset[[1,3,2]]
-        
+
     # This results in IOError as the argument is not properly validated.
     # Suggest IndexError be raised.
     @ut.expectedFailure
@@ -461,6 +461,7 @@ class Test2DZeroFloat(TestCase):
         self.assertNumpyBehavior(self.dset, self.data, np.s_[:, [0, 1, 2]])
 
 
+@ut.skipUnless(h5py.version.hdf5_version_tuple >= (1, 8, 7), 'HDF5 1.8.7+ required')
 class Test3DFloat(TestCase):
 
     base = 3
@@ -479,6 +480,11 @@ class Test3DFloat(TestCase):
     def test_shape(self):
         """ Verify shape """
         self.assertEquals(self.dset.shape, tuple(self.ndim * [self.base]))
+
+    @ut.skip('WIP')
+    def test_indexlist_nonidecreasing(self):
+        """ non-decreasing lists work """
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[0, :, [1,1,2]])
 
     def test_all_slice_list_and_index_cases(self):
         """ Verify all possible vector slicing combinations but

@@ -504,6 +504,11 @@ class Dataset(HLObject):
         if selection.reorder != 0:
             # This allows vector numpy-style indexing:
             arr = numpy.rollaxis(arr, selection.reorder)
+        if (selection.invaxis is not None and
+           selection.inv is not None):
+            # This allows for repeated indices and a limited set of
+            # unordered index lists.
+            arr = numpy.take(arr, selection.inv, axis=selection.invaxis)
         return arr
 
     @with_phil

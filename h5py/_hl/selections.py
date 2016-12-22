@@ -83,7 +83,8 @@ def select(shape, args, dsid):
         if not isinstance(a, slice) and a is not Ellipsis:
             try:
                 int(a)
-            except Exception:
+            #except Exception:
+            except TypeError:
                 sel = FancySelection(shape)
                 sel[args]
                 return sel
@@ -138,6 +139,12 @@ class Selection(object):
         reorder (read-only) => Returns an int that indicates which axis should
                                be brought to the front of the array.
                                Default: 0.
+        inv (read-only)     => Returns an int array that should be used to
+                               perform and inverse sort on "invaxis".
+                               Default: None.
+        invaxis (read-only) => Returns an int that indicates which axis should
+                               be inverted.
+                               Default: 0.
 
         broadcast(target_shape) => Return an iterable which yields dataspaces
                                    for read, based on target_shape.
@@ -173,8 +180,18 @@ class Selection(object):
 
     @property
     def reorder(self):
-        """ Should the result be reordered """
+        """ Which axis should be reordered """
         return 0
+
+    @property
+    def inv(self):
+        """ How should the axis be inverted """
+        return None
+
+    @property
+    def invaxis(self):
+        """ Which axis should be inverted """
+        return None
 
     @property
     def mshape(self):
@@ -340,10 +357,20 @@ class FancySelection(Selection):
     def reorder(self):
         return self._reorder
 
+    @property
+    def inv(self):
+        return self._inv
+
+    @property
+    def invaxis(self):
+        return self._invaxis
+
     def __init__(self, shape, *args, **kwds):
         Selection.__init__(self, shape, *args, **kwds)
         self._mshape = self.shape
         self._reorder = 0
+        self._invaxis = None
+        self._inv = None
 
     def __getitem__(self, args):
 
@@ -364,11 +391,11 @@ class FancySelection(Selection):
                 try:
                     sequenceargs[idx] = list(arg)
                 except TypeError:
-                    pass
+                     pass
                 else:
                     if sorted(arg) != list(arg):
                         raise TypeError("Indexing elements must be in "
-                                        "increasing order")
+                                        "non-decreasing order")
 
         if len(sequenceargs) == 0:
             raise TypeError("Advanced selection inappropriate")
@@ -382,6 +409,28 @@ class FancySelection(Selection):
             if (not isinstance(arg, slice) and
                idx not in sequenceargs):
                 sequenceargs[idx] = vectorlength * [arg]
+
+        nonmono = False
+        if nonmono:
+            # Try to simultaneously sort the sequences:
+            (sortedsequences,
+             self._inv) = np.unique(
+                            np.array(list(zip(*sequenceargs.values())),
+                                     dtype=[(str(idx), 'i')
+                                            for idx in sequenceargs]),
+                            return_inverse=True)
+            for idx in sortedsequences.dtype.names:
+                sequenceargs[int(idx)] = sortedsequences[idx].tolist()
+            # Check if they are all sorted:
+            for entry in sequenceargs.values():
+                if np.min(np.diff(entry)) < 0:
+                    raise TypeError("Vector Indexing with more than one list "
+                                    "requires that all list can be "
+                                    "simulataneously sorted and yield "
+                                    "non-decreasing sequences.")
+            # Redefine vectorlenght as it may have changed if there were repeated
+            # indices:
+            vectorlength = len(list(sequenceargs.values())[0])
 
         # Now generate a vector of selection lists,
         # consisting only of slices and ints
@@ -412,23 +461,22 @@ class FancySelection(Selection):
                   len(sequenceargs) > 1):
                 mshape[idx] = 0
 
+        sortedaxes = np.sort(list(sequenceargs.keys()))
+        if np.max(np.diff(sortedaxes)) > 1:
+            for num, idx in enumerate(sortedaxes):
+                # Find the first non-identical sequence:
+                if len(set(sequenceargs[idx])) > 1:
+                    sequenceaxis = idx
+                    self._reorder = idx - num
+                    self._invaxis = 0
+                    break
+        else:
+            sequenceaxis = np.min(sortedaxes)
+            self._invaxis = sequenceaxis
+        mshape = np.asarray(mshape)
+        mshape[sequenceaxis] = vectorlength
+
         self._mshape = tuple(x for x in mshape if x != 0)
-
-        if len(sequenceargs) > 1:
-            sortedaxes = np.sort(list(sequenceargs.keys()))
-            if np.max(np.diff(sortedaxes)) > 1:
-                for num, idx in enumerate(sortedaxes):
-                    # Find the first non-identical sequence:
-                    if len(set(sequenceargs[idx])) > 1:
-                        sequenceaxis = idx
-                        self._reorder = idx - num
-                        break
-            else:
-                sequenceaxis = np.min(sortedaxes)
-            mshape = np.asarray(mshape)
-            mshape[sequenceaxis] = vectorlength
-
-            self._mshape = tuple(x for x in mshape if x != 0)
 
     def broadcast(self, target_shape):
         if not target_shape == self.mshape:
