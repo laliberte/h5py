@@ -83,8 +83,7 @@ def select(shape, args, dsid):
         if not isinstance(a, slice) and a is not Ellipsis:
             try:
                 int(a)
-            #except Exception:
-            except TypeError:
+            except Exception:
                 sel = FancySelection(shape)
                 sel[args]
                 return sel
@@ -391,11 +390,7 @@ class FancySelection(Selection):
                 try:
                     sequenceargs[idx] = list(arg)
                 except TypeError:
-                     pass
-                else:
-                    if sorted(arg) != list(arg):
-                        raise TypeError("Indexing elements must be in "
-                                        "non-decreasing order")
+                    pass
 
         if len(sequenceargs) == 0:
             raise TypeError("Advanced selection inappropriate")
@@ -405,13 +400,19 @@ class FancySelection(Selection):
             raise TypeError("All sequence arguments must have the same "
                             "length %s" % sequenceargs)
 
+        # Allow at mot one sequence with repeated entries:
+        if sum([(len(set(entry)) > 1 and len(set(entry)) < len(entry))
+                for entry in sequenceargs.values()]) > 1:
+                raise TypeError("Vector Indexing with more than one list "
+                                "can only have one list with "
+                                "withrepeated entries.")
+
         for idx, arg in enumerate(args):
             if (not isinstance(arg, slice) and
                idx not in sequenceargs):
                 sequenceargs[idx] = vectorlength * [arg]
 
-        nonmono = False
-        if nonmono:
+        if vectorlength > 1:
             # Try to simultaneously sort the sequences:
             (sortedsequences,
              self._inv) = np.unique(
@@ -428,8 +429,8 @@ class FancySelection(Selection):
                                     "requires that all list can be "
                                     "simulataneously sorted and yield "
                                     "non-decreasing sequences.")
-            # Redefine vectorlenght as it may have changed if there were repeated
-            # indices:
+            # Redefine vectorlenght as it may have changed if there were
+            # repeated indices:
             vectorlength = len(list(sequenceargs.values())[0])
 
         # Now generate a vector of selection lists,
@@ -462,7 +463,8 @@ class FancySelection(Selection):
                 mshape[idx] = 0
 
         sortedaxes = np.sort(list(sequenceargs.keys()))
-        if np.max(np.diff(sortedaxes)) > 1:
+        if (len(sequenceargs) > 1 and
+           np.max(np.diff(sortedaxes)) > 1):
             for num, idx in enumerate(sortedaxes):
                 # Find the first non-identical sequence:
                 if len(set(sequenceargs[idx])) > 1:

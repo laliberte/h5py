@@ -407,9 +407,8 @@ class Test1DFloat(TestCase):
             self.dset[[100]]
                 
     def test_indexlist_nonmonotonic(self):
-        """ we require index list values to be non-decreasing """
-        with self.assertRaises(TypeError):
-            self.dset[[1,3,2]]
+        """ we allow index list values to be non-decreasing """
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[[1,3,2]])
 
     # This results in IOError as the argument is not properly validated.
     # Suggest IndexError be raised.
@@ -481,10 +480,35 @@ class Test3DFloat(TestCase):
         """ Verify shape """
         self.assertEquals(self.dset.shape, tuple(self.ndim * [self.base]))
 
-    @ut.skip('WIP')
     def test_indexlist_nonidecreasing(self):
-        """ non-decreasing lists work """
-        self.assertNumpyBehavior(self.dset, self.data, np.s_[0, :, [1,1,2]])
+        """ limited set of non-decreasing lists work """
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[:, :, [1, 1, 2]])
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[[1, 1, 2], :, :])
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[:, [1, 1, 2], :])
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[0, [1, 1, 2], :])
+        self.assertNumpyBehavior(self.dset, self.data, np.s_[:, [1, 1, 2], 0])
+
+    def test_indexlist_repeated_nondecreasing(self):
+        """
+        cannot have more than one list with repeated
+        indices unless one is trivial
+        """
+        # This is trivial:
+        self.assertNumpyBehavior(self.dset, self.data,
+                                 np.s_[[1, 1, 2], :, [1, 1, 1]])
+        with self.assertRaises(TypeError):
+            self.dset[:, [1, 2, 2], [1, 1, 2]]
+        with self.assertRaises(TypeError):
+            self.dset[[1, 2, 2], :, [1, 1, 2]]
+        with self.assertRaises(TypeError):
+            self.dset[[1, 2, 2], 0, [1, 1, 2]]
+
+    def test_indexlist_nonsortable(self):
+        """ Multiple lists <=> simultaneously sortable """
+        self.assertNumpyBehavior(self.dset, self.data,
+                                 np.s_[:, [2, 1, 0], [2, 2, 1]])
+        with self.assertRaises(TypeError):
+            self.dset[:, [1, 2, 0], [1, 1, 2]]
 
     def test_all_slice_list_and_index_cases(self):
         """ Verify all possible vector slicing combinations but
